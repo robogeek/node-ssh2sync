@@ -7,56 +7,42 @@ var fs    = require('fs');
 
 
 
-var root_local = process.env["HOME"] + "/boilerplate/reikijobsboard.com/out";
-var root_remote = "/home/reikiman/test-reikijobsboard.com";
-var force = true;
-
-var c = new Connection();
-c.on('connect', function() {
-    util.log('Connection :: connect');
-});
-c.on('ready', function() {
-    util.log('Connection :: ready');
-    c.sftp(function(err, sftp) {
-        if (err) throw err;
-        sftp.on('end', function() {
-            util.log('SFTP :: SFTP session closed');
-        });
-        doit(root_local, root_remote, sftp, "", function(err) {
+module.exports.upload = function(root_local, root_remote, force, ssh2opts) {
+    
+    var c = new Connection();
+    c.on('connect', function() {
+        util.log('Connection :: connect');
+    });
+    c.on('ready', function() {
+        util.log('Connection :: ready');
+        c.sftp(function(err, sftp) {
             if (err) throw err;
-            util.log('SFTP :: Handle closed');
-            sftp.end();
-            c.end();
+            sftp.on('end', function() {
+                util.log('SFTP :: SFTP session closed');
+            });
+            doit(root_local, root_remote, force, sftp, "", function(err) {
+                if (err) throw err;
+                util.log('SFTP :: Handle closed');
+                sftp.end();
+                c.end();
+            });
         });
     });
-});
-c.on('error', function(err) {
-    util.log('Connection :: error :: ' + err);
-});
-c.on('end', function() {
-    util.log('Connection :: end');
-});
-c.on('close', function(had_error) {
-    util.log('Connection :: close');
-});
-c.connect({
-//    debug: console.log,
-  host: 'rules4humans.com',
-  //host: 'mainmini.local',
-  port: 22,
-  username: 'reikiman',
-  //username: 'david',
-  privateKey: require('fs').readFileSync('/Users/davidherron/.ssh/id_dsa')
-  /*
-  host: '192.168.100.100',
-  port: 22,
-  username: 'frylock',
-  password: 'nodejsrules'
-  */
-});
+    c.on('error', function(err) {
+        util.log('Connection :: error :: ' + err);
+    });
+    c.on('end', function() {
+        util.log('Connection :: end');
+    });
+    c.on('close', function(had_error) {
+        util.log('Connection :: close');
+    });
+    c.connect(ssh2opts);
+}
 
 
-var doit = function(root_local, root_remote, sftp, dir, done) {
+
+var doit = function(root_local, root_remote, force, sftp, dir, done) {
     
     var localdir = root_local +'/'+ dir;
     var statzdir = fs.statSync(localdir);
@@ -98,7 +84,7 @@ var doit = function(root_local, root_remote, sftp, dir, done) {
                                         atime: statz.atime,
                                         mtime: statz.mtime
                                     }, function(err) {
-                                        doit(root_local, root_remote, sftp, thepath, function(err) {
+                                        doit(root_local, root_remote, force, sftp, thepath, function(err) {
                                             if (err) cb(err); else cb();
                                         });
                                     });
@@ -106,7 +92,7 @@ var doit = function(root_local, root_remote, sftp, dir, done) {
                             });
                         } else {
                             util.log('REMOTE DIR ' + remotedir +' '+ util.inspect(attrs));
-                            doit(root_local, root_remote, sftp, thepath, function(err) {
+                            doit(root_local, root_remote, force, sftp, thepath, function(err) {
                                 if (err) cb(err); else cb();
                             });
                         }
