@@ -5,12 +5,11 @@ var util = require('util');
 var async = require('async');
 var fs    = require('fs');
 
-var Connection = require('ssh2');
 
 
 var root_local = process.env["HOME"] + "/boilerplate/reikijobsboard.com/out";
 var root_remote = "/home/reikiman/test-reikijobsboard.com";
-var force = false;
+var force = true;
 
 var c = new Connection();
 c.on('connect', function() {
@@ -27,6 +26,7 @@ c.on('ready', function() {
             if (err) throw err;
             util.log('SFTP :: Handle closed');
             sftp.end();
+            c.end();
         });
     });
 });
@@ -68,7 +68,7 @@ var doit = function(root_local, root_remote, sftp, dir, done) {
             function(file, cb) {
                 var thepath = (dir !== "") ? (dir+'/'+file) : file;
                 var localfile = root_local +'/'+ thepath;
-                util.log('TEST ' + localfile);
+                util.log('TEST ' + localfile +' PATH '+ thepath +' DIR '+ dir +' FILE '+ file);
                 var statz = fs.statSync(localfile);
                 // util.log(util.inspect(statz));
                 if (statz.isDirectory()) {
