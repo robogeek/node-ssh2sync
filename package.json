@@ -1,0 +1,23 @@
+{
+  "author": {
+    "name": "David Herron",
+    "email": "david@davidherron.com",
+    "url": "http://nodejs.davidherron.com"
+  },
+  "name": "ssh2sync",
+  "description": "Synchronize files to a remote server using ssh2.",
+  "homepage": "https://github.com/robogeek/node-ssh2sync",
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/robogeek/node-ssh2sync.git"
+  },
+  "version": "0.0.1",
+  "engines": {
+    "node": ">=0.8.1"
+  },
+  "dependencies": {
+    "ssh2": "*",
+    "filewalker": ">=0.1.1",
+    "async": ">=0.1.22"
+  }
+}
