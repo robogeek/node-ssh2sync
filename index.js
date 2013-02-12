@@ -4,6 +4,7 @@ var Connection = require('ssh2');
 var util = require('util');
 var async = require('async');
 var fs    = require('fs');
+var path  = require('path');
 
 
 
@@ -44,7 +45,7 @@ module.exports.upload = function(root_local, root_remote, force, ssh2opts) {
 
 var doit = function(root_local, root_remote, force, sftp, dir, done) {
     
-    var localdir = root_local +'/'+ dir;
+    var localdir = path.join(root_local, dir);
     var statzdir = fs.statSync(localdir);
     if (! statzdir.isDirectory()) {
         throw "NOT A DIRECTORY " + localdir;
@@ -52,9 +53,9 @@ var doit = function(root_local, root_remote, force, sftp, dir, done) {
         var filez = fs.readdirSync(localdir);
         async.forEachSeries(filez,
             function(file, cb) {
-                var thepath = (dir !== "") ? (dir+'/'+file) : file;
-                var localfile = root_local +'/'+ thepath;
-                util.log('TEST ' + localfile +' PATH '+ thepath +' DIR '+ dir +' FILE '+ file);
+                var thepath = (dir !== "") ? (path.join(dir, file)) : file;
+                var localfile = path.normalize(path.join(root_local, dir, file));
+                // util.log('TEST ' + localfile +' PATH '+ thepath +' DIR '+ dir +' FILE '+ file);
                 var statz = fs.statSync(localfile);
                 // util.log(util.inspect(statz));
                 if (statz.isDirectory()) {
@@ -62,13 +63,12 @@ var doit = function(root_local, root_remote, force, sftp, dir, done) {
                     if not, make the remote directory
                     once satisfied either way, */
                     
-                    var remotedir = root_remote +'/'+ thepath;
-                    util.log('DIR PATH ' + thepath +' REMOTE DIR '+ remotedir);
+                    var remotedir  = root_remote +'/'+ ((dir !== "") ? (dir+'/'+file) : file);
+                    // util.log('DIR PATH ' + thepath +' REMOTE DIR '+ remotedir);
                     sftp.stat(remotedir, function(err, attrs) {
                         if (err) {
                             // Most likely the error is remote directory not existing
-                            // TBD create attributes object
-                            util.log('CREATING REMOTE DIR ' + remotedir);
+                            // util.log('CREATING REMOTE DIR ' + remotedir);
                             sftp.mkdir(remotedir, {
                                 ctime: statz.ctime,
                                 atime: statz.atime,
@@ -78,7 +78,7 @@ var doit = function(root_local, root_remote, force, sftp, dir, done) {
                                     util.log('ERROR MAKING REMOTE DIR ' + remotedir + ' '+ err);
                                     cb(err);
                                 } else {
-                                    util.log('MADE REMOTE DIR ' + remotedir);
+                                    util.log('mkdir ' + remotedir);
                                     sftp.setstat(remotedir, {
                                         ctime: statz.ctime,
                                         atime: statz.atime,
@@ -91,7 +91,7 @@ var doit = function(root_local, root_remote, force, sftp, dir, done) {
                                 }
                             });
                         } else {
-                            util.log('REMOTE DIR ' + remotedir +' '+ util.inspect(attrs));
+                            // util.log('REMOTE DIR ' + remotedir +' '+ util.inspect(attrs));
                             doit(root_local, root_remote, force, sftp, thepath, function(err) {
                                 if (err) cb(err); else cb();
                             });
@@ -102,9 +102,9 @@ var doit = function(root_local, root_remote, force, sftp, dir, done) {
                     if not, upload
                     if it does, and if local differs from remote, upload*/
                     
-                    util.log('FILE PATH ' + thepath);
+                    // util.log('FILE PATH ' + thepath);
                     var remotefile  = root_remote +'/'+ thepath;
-                    util.log('REMOTE FILE ' + remotefile);
+                    util.log('upload to ' + remotefile);
                     var closehandle = function(handle, remotefile, statz, cb) {
                         sftp.close(handle, function(err) {
                             if (err) {
@@ -154,9 +154,9 @@ var doit = function(root_local, root_remote, force, sftp, dir, done) {
                             // Most likely the error is that the remote file does not exist
                             doupload(remotefile, localfile, statz, cb);
                         } else {
-                            util.log('REMOTE FILE ' + remotefile +' '+ util.inspect(attrs));
+                            // util.log('REMOTE FILE ' + remotefile); // +' '+ util.inspect(attrs));
                             if (force) doupload(remotefile, localfile, statz, cb);
-                            cb();
+                            else cb();
                         }
                     });
                 }
@@ -165,8 +165,36 @@ var doit = function(root_local, root_remote, force, sftp, dir, done) {
                 if (err) {
                     util.log('ERR ' + err);
                     done(err);
-                } else
-                    done();
+                } else {
+                    var localfiles = fs.readdirSync(localdir);
+                    var checkdir = function(sftp, handle, done) {
+                        sftp.readdir(handle, function(err, list) {
+                            if (err) done(err);
+                            else if (!list) done();
+                            else {
+                                list.forEach(function(entry) {
+                                    var existlocal = false;
+                                    localfiles.forEach(function(fn) {
+                                        if (fn === entry.filename) existlocal = true;
+                                    });
+                                    if (!existlocal && entry.filename !== "." && entry.filename !== "..") {
+                                        util.log('rm '+ remotedir+'/'+ entry.filename);
+                                        sftp.unlink(remotedir+'/'+ entry.filename, function(err) {
+                                            if (err) util.log('FAILED to unlink '+ remotedir+'/'+ entry.filename
+                                                    +' BECAUSE '+ err);
+                                        });
+                                    }
+                                });
+                                checkdir(sftp, handle, done);
+                            }
+                        });
+                    };
+                    var remotedir  = root_remote +'/'+ dir;
+                    sftp.opendir(remotedir, function(err, handle) {
+                        if (err) done(err);
+                        else checkdir(sftp, handle, done);
+                    });
+                }
             });
     }
 }
