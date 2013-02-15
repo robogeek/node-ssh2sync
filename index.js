@@ -108,7 +108,7 @@ var doit = function(root_local, root_remote, path_local, path_remote, force, sft
                     if it does, and if local differs from remote, upload*/
                     
                     // util.log('FILE PATH ' + thepath);
-                    var remotefile  = root_remote +'/'+ root_path;
+                    var remotefile  = root_remote +'/'+ path_remote;
                     util.log('upload to ' + remotefile);
                     var closehandle = function(handle, remotefile, statz, cb) {
                         sftp.close(handle, function(err) {
