@@ -43,9 +43,9 @@ module.exports.upload = function(root_local, root_remote, force, ssh2opts) {
 
 
 
-var doit = function(root_local, root_remote, force, sftp, dir, done) {
+var doit = function(root_local, root_remote, path_local, path_remote, force, sftp, done) {
     
-    var localdir = path.join(root_local, dir);
+    var localdir = path.join(root_local, path_local);
     var statzdir = fs.statSync(localdir);
     if (! statzdir.isDirectory()) {
         throw "NOT A DIRECTORY " + localdir;
@@ -53,8 +53,7 @@ var doit = function(root_local, root_remote, force, sftp, dir, done) {
         var filez = fs.readdirSync(localdir);
         async.forEachSeries(filez,
             function(file, cb) {
-                var thepath = (dir !== "") ? (path.join(dir, file)) : file;
-                var localfile = path.normalize(path.join(root_local, dir, file));
+                var localfile = path.normalize(path.join(localdir, file));
                 // util.log('TEST ' + localfile +' PATH '+ thepath +' DIR '+ dir +' FILE '+ file);
                 var statz = fs.statSync(localfile);
                 // util.log(util.inspect(statz));
@@ -63,7 +62,7 @@ var doit = function(root_local, root_remote, force, sftp, dir, done) {
                     if not, make the remote directory
                     once satisfied either way, */
                     
-                    var remotedir  = root_remote +'/'+ ((dir !== "") ? (dir+'/'+file) : file);
+                    var remotedir  = root_remote +'/'+ ((path_remote !== "") ? (path_remote+'/'+file) : file);
                     // util.log('DIR PATH ' + thepath +' REMOTE DIR '+ remotedir);
                     sftp.stat(remotedir, function(err, attrs) {
                         if (err) {
@@ -84,7 +83,10 @@ var doit = function(root_local, root_remote, force, sftp, dir, done) {
                                         atime: statz.atime,
                                         mtime: statz.mtime
                                     }, function(err) {
-                                        doit(root_local, root_remote, force, sftp, thepath, function(err) {
+                                        doit(root_local, root_remote,
+                                             path.join(local_path, file),
+                                             remote_path +'/'+ file,
+                                             force, sftp, function(err) {
                                             if (err) cb(err); else cb();
                                         });
                                     });
@@ -92,7 +94,10 @@ var doit = function(root_local, root_remote, force, sftp, dir, done) {
                             });
                         } else {
                             // util.log('REMOTE DIR ' + remotedir +' '+ util.inspect(attrs));
-                            doit(root_local, root_remote, force, sftp, thepath, function(err) {
+                            doit(root_local, root_remote,
+                                path.join(local_path, file),
+                                remote_path +'/'+ file,
+                                force, sftp, function(err) {
                                 if (err) cb(err); else cb();
                             });
                         }
