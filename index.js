@@ -42,6 +42,65 @@ module.exports.upload = function(root_local, root_remote, force, ssh2opts) {
 }
 
 
+var mkdir = function(sftp, dir, attrs, cb) {
+    sftp.mkdir(dir, attrs, function(err) {
+        if (err) {
+            // util.log('ERROR MAKING REMOTE DIR ' + remotedir + ' '+ err);
+            cb(err);
+        } else {
+            util.log('mkdir ' + remotedir);
+            sftp.setstat(remotedir, attrs, function(err) {
+                if (err) cb(err); else cb();
+            });
+        }
+    });
+}
+
+var closehandle = function(sftp, handle, remotefile, statz, cb) {
+    sftp.close(handle, function(err) {
+        if (err) {
+            cb(err);
+        } else {
+            sftp.setstat(remotefile, {
+                ctime: statz.ctime,
+                atime: statz.atime,
+                mtime: statz.mtime
+            }, function(err) {
+                if (err) cb(err); else cb();
+            });
+        }
+    });
+}
+
+var doupload = function(sftp, remotefile, localfile, statz, cb) {
+    sftp.open(remotefile, "w", {
+        ctime: statz.ctime,
+        atime: statz.atime,
+        mtime: statz.mtime
+    }, function(err, handle) {
+        if (err) {
+            cb(err);
+        } else {
+            fs.readFile(localfile, function(err, data) {
+                if (err) {
+                    cb(err);
+                } else {
+                    if (data.length === 0) {
+                        closehandle(sftp, handle, remotefile, statz, cb);
+                    } else {
+                        sftp.write(handle, data, 0, data.length, 0, function(err) {
+                            if (err) {
+                                cb(err);
+                            } else {
+                                closehandle(sftp, handle, remotefile, statz, cb);
+                            }
+                        });
+                    }
+                }
+            });
+        }
+    });
+}
 
 var doit = function(root_local, root_remote, path_local, path_remote, force, sftp, done) {
     
@@ -69,29 +128,18 @@ var doit = function(root_local, root_remote, path_local, path_remote, force, sft
                         if (err) {
                             // Most likely the error is remote directory not existing
                             // util.log('CREATING REMOTE DIR ' + remotedir);
-                            sftp.mkdir(remotedir, {
+                            mkdir(sftb, remotedir, {
                                 ctime: statz.ctime,
                                 atime: statz.atime,
                                 mtime: statz.mtime
-                            }, function(err) {
-                                if (err) {
-                                    // util.log('ERROR MAKING REMOTE DIR ' + remotedir + ' '+ err);
-                                    cb(err);
-                                } else {
-                                    util.log('mkdir ' + remotedir);
-                                    sftp.setstat(remotedir, {
-                                        ctime: statz.ctime,
-                                        atime: statz.atime,
-                                        mtime: statz.mtime
-                                    }, function(err) {
-                                        doit(root_local, root_remote,
-                                             path.join(path_local, file),
-                                             path_remote +'/'+ file,
-                                             force, sftp, function(err) {
-                                            if (err) cb(err); else cb();
-                                        });
-                                    });
-                                }
+                            },
+                            function(err) {
+                                doit(root_local, root_remote,
+                                     path.join(path_local, file),
+                                     path_remote +'/'+ file,
+                                     force, sftp, function(err) {
+                                    if (err) cb(err); else cb();
+                                });
                             });
                         } else {
                             // util.log('REMOTE DIR ' + remotedir +' '+ util.inspect(attrs));
@@ -110,60 +158,17 @@ var doit = function(root_local, root_remote, path_local, path_remote, force, sft
                     
                     // util.log('FILE PATH ' + localfile);
                     var remotefile  = root_remote
-                            +'/'+ (path_remote !== "" ? (path_remote +'/') : "")
+                            + (path_remote !== "" ? (path_remote +'/') : "/")
                             + file;
+                    // util.log('root_remote '+ root_remote +' path_remote '+ path_remote +' file '+ file);
                     util.log('upload to ' + remotefile);
-                    var closehandle = function(handle, remotefile, statz, cb) {
-                        sftp.close(handle, function(err) {
-                            if (err) {
-                                cb(err);
-                            } else {
-                                sftp.setstat(remotefile, {
-                                    ctime: statz.ctime,
-                                    atime: statz.atime,
-                                    mtime: statz.mtime
-                                }, function(err) {
-                                    if (err) cb(err); else cb();
-                                });
-                            }
-                        });
-                    }
-                    var doupload = function(remotefile, localfile, statz, cb) {
-                        sftp.open(remotefile, "w", {
-                            ctime: statz.ctime,
-                            atime: statz.atime,
-                            mtime: statz.mtime
-                        }, function(err, handle) {
-                            if (err) {
-                                cb(err);
-                            } else {
-                                fs.readFile(localfile, function(err, data) {
-                                    if (err) {
-                                        cb(err);
-                                    } else {
-                                        if (data.length === 0) {
-                                            closehandle(handle, remotefile, statz, cb);
-                                        } else {
-                                            sftp.write(handle, data, 0, data.length, 0, function(err) {
-                                                if (err) {
-                                                    cb(err);
-                                                } else {
-                                                    closehandle(handle, remotefile, statz, cb);
-                                                }
-                                            });
-                                        }
-                                    }
-                                });
-                            }
-                        });
-                    }
                     sftp.stat(remotefile, function(err, attrs) {
                         if (err) {
                             // Most likely the error is that the remote file does not exist
-                            doupload(remotefile, localfile, statz, cb);
+                            doupload(sftp, remotefile, localfile, statz, cb);
                         } else {
                             // util.log('REMOTE FILE ' + remotefile); // +' '+ util.inspect(attrs));
-                            if (force) doupload(remotefile, localfile, statz, cb);
+                            if (force) doupload(sftp, remotefile, localfile, statz, cb);
                             else cb();
                         }
                     });
