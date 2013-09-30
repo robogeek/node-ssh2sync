@@ -45,11 +45,11 @@ module.exports.upload = function(root_local, root_remote, force, ssh2opts) {
 var mkdir = function(sftp, dir, attrs, cb) {
     sftp.mkdir(dir, attrs, function(err) {
         if (err) {
-            // util.log('ERROR MAKING REMOTE DIR ' + remotedir + ' '+ err);
+            util.log('ERROR MAKING REMOTE DIR ' + dir + ' '+ err);
             cb(err);
         } else {
-            util.log('mkdir ' + remotedir);
-            sftp.setstat(remotedir, attrs, function(err) {
+            util.log('mkdir ' + dir);
+            sftp.setstat(dir, attrs, function(err) {
                 if (err) cb(err); else cb();
             });
         }
@@ -127,8 +127,8 @@ var doit = function(root_local, root_remote, path_local, path_remote, force, sft
                     sftp.stat(remotedir, function(err, attrs) {
                         if (err) {
                             // Most likely the error is remote directory not existing
-                            // util.log('CREATING REMOTE DIR ' + remotedir);
-                            mkdir(sftb, remotedir, {
+                            util.log('CREATING REMOTE DIR ' + remotedir);
+                            mkdir(sftp, remotedir, {
                                 ctime: statz.ctime,
                                 atime: statz.atime,
                                 mtime: statz.mtime
@@ -168,8 +168,12 @@ var doit = function(root_local, root_remote, path_local, path_remote, force, sft
                             doupload(sftp, remotefile, localfile, statz, cb);
                         } else {
                             // util.log('REMOTE FILE ' + remotefile); // +' '+ util.inspect(attrs));
-                            if (force) doupload(sftp, remotefile, localfile, statz, cb);
-                            else cb();
+                            if (force) {
+                                doupload(sftp, remotefile, localfile, statz, cb);
+                            } else {
+                                //util.log('not upload to ' + remotefile);
+                                cb();
+                            }
                         }
                     });
                 }
